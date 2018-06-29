@@ -1,3 +1,3 @@
 # MyMesh-Test
 Test stuff for MyMesh
-[screenshot]: img/markdown_logo.png
+[logo]:LubuntuScreenShot_MyMesh_2018_629.png

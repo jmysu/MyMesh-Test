@@ -72,8 +72,8 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   String msg = String(cleanPayload);
   free(cleanPayload);
 
-  String targetStr = String(topic).substring(16);
-
+  //String targetStr = String(topic).substring(16);//painlessMesh/to/
+  String targetStr = String(topic).substring(10);//MyMesh/to/
   if(targetStr == "gateway")
   {
     if(msg == "getNodes")

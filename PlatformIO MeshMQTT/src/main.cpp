@@ -13,8 +13,9 @@
 #define HOSTNAME "MeshMQTT"
 
 // Prototypes
-void receivedCallback( const uint32_t &from, const String &msg );
+void meshReceivedCallback( const uint32_t &from, const String &msg );
 void mqttCallback(char* topic, byte* payload, unsigned int length);
+void changedConnectionCallback();
 
 IPAddress getlocalIP();
 
@@ -22,8 +23,23 @@ IPAddress myIP(0,0,0,0);
 IPAddress mqttBroker(192, 168, 0, 103);
 
 painlessMesh  mesh;
+bool calc_delay = false;
+SimpleList<uint32_t> nodes;
+
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttBroker, 3883, mqttCallback, wifiClient);
+
+int iMeshNodes=0;
+void changedConnectionCallback() {
+  nodes = mesh.getNodeList();
+  if (nodes.size() != iMeshNodes) {
+    iMeshNodes = nodes.size();
+    Serial.printf("Changed connections %s\n", mesh.subConnectionJson().c_str());
+    //MQTT getNodes report--------------------------------------------------------
+    mqttClient.publish("MyMesh/from/debug", mesh.subConnectionJson().c_str());
+    }
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -34,31 +50,49 @@ void setup() {
   // Channel set to 6. Make sure to use the same channel for your mesh and for you other
   // network (STATION_SSID)
   mesh.init( MESH_PREFIX, MESH_PASSWORD, MESH_PORT, WIFI_AP_STA, 6 );
-  mesh.onReceive(&receivedCallback);
+  mesh.onReceive(&meshReceivedCallback);
+  mesh.onChangedConnections(&changedConnectionCallback);
 
   mesh.stationManual(STATION_SSID, STATION_PASSWORD);
   mesh.setHostname(HOSTNAME);
 }
 
+bool bGotIP = false;
+int lastReconnectAttempt=0;
 void loop() {
   mesh.update();
-  mqttClient.loop();
 
-  if(myIP != getlocalIP()){
+  if (bGotIP) {
+    if (!mqttClient.loop()) { //No mqtt connection yet
+      long now = millis();
+      if (now - lastReconnectAttempt > 3000) {// Attempt to reconnect @5sec
+        lastReconnectAttempt = now;
+        Serial.println("MQTT reconnecting...");
+        if (mqttClient.connect("MyMeshBridge")) {
+          mqttClient.publish("MyMesh/from/gateway","------Mesh Bridge Ready------");
+          mqttClient.subscribe("MyMesh/to/#");
+          lastReconnectAttempt = 0;
+          }
+        }
+      }
+    }
+  else {
+    if(myIP != getlocalIP()){//LocalIP changed
     myIP = getlocalIP();
     Serial.println("My IP is " + myIP.toString());
     String msg = "My Node is ";
     msg += mesh.getNodeId();
     Serial.println(msg);
-
-    if (mqttClient.connect("MyMeshClient")) {
-      mqttClient.publish("MyMesh/from/gateway","Ready!");
-      mqttClient.subscribe("MyMesh/to/#");
+    bGotIP = true;
+    //if (mqttClient.connect("MyMeshClient")) {
+    //  mqttClient.publish("MyMesh/from/gateway","Ready!");
+    //  mqttClient.subscribe("MyMesh/to/#");
+    //  }
     }
   }
 }
 
-void receivedCallback( const uint32_t &from, const String &msg ) {
+void meshReceivedCallback( const uint32_t &from, const String &msg ) {
   Serial.printf("bridge: Received from $%03u msg=%s\n", from%1000, msg.c_str());
   String sFrom = String(from);
   String topic = "MyMesh/from/" + sFrom.substring(sFrom.length()-3);
@@ -71,16 +105,19 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   memcpy(cleanPayload, payload, length+1);
   String msg = String(cleanPayload);
   free(cleanPayload);
+  //                                                  01234567890123456
+  //String targetStr = String(topic).substring(16); //PainlessMesh/to/
+  //                                                01234567890
+  String targetStr = String(topic).substring(10); //MyMesh/to/
 
-  String targetStr = String(topic).substring(16);
+  Serial.print("MQTT Topic:");
+  Serial.println(targetStr);
 
-  if(targetStr == "gateway")
-  {
-    if(msg == "getNodes")
-    {
+  if(targetStr == "gateway"){
+    if(msg == "getNodes"){
       mqttClient.publish("MyMesh/from/gateway", mesh.subConnectionJson().c_str());
+      }
     }
-  }
   else if(targetStr == "broadcast")
   {
     mesh.sendBroadcast(msg);
@@ -88,13 +125,17 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
   else
   {
     uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
-    if(mesh.isConnected(target))
-    {
+    Serial.print("MQTT Target:");
+    Serial.println(target);
+    if(mesh.isConnected(target)) {
       mesh.sendSingle(target, msg);
-    }
-    else
-    {
-      mqttClient.publish("MyMesh/from/gateway", "Client not connected!");
+      Serial.print("MQTT Msg:");
+      Serial.println(msg);
+      Serial.println("Message sent");
+      }
+    else {
+      mqttClient.publish("MyMesh/from/gateway topic:", targetStr.c_str());
+      mqttClient.publish("MyMesh/from/gateway   msg:", msg.c_str());
     }
   }
 }

@@ -41,6 +41,26 @@ String getFormattedMillis(){
     return String(buf);
     }
 
+/*
+    // https://stackoverflow.com/questions/9072320/split-string-into-string-array
+*/
+String getSplitted(String data, char separator, int index)
+    {
+      int found = 0;
+      int strIndex[] = {0, -1};
+      int maxIndex = data.length()-1;
+
+      for(int i=0; i<=maxIndex && found<=index; i++){
+        if(data.charAt(i)==separator || i==maxIndex){
+            found++;
+            strIndex[0] = strIndex[1]+1;
+            strIndex[1] = (i == maxIndex) ? i+1 : i;
+        }
+      }
+
+      return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
+    }
+
 Scheduler     userScheduler; // to control your personal task
 painlessMesh  mesh;
 
@@ -130,6 +150,13 @@ void sendMessage() {
 
 void receivedCallback(uint32_t from, String & msg) {
   Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+  if (msg.indexOf("=")>0) {
+    String s0= getSplitted(msg, '=',0);
+    String s1= getSplitted(msg, '=',1);
+    String sCmd="Got cmd:"+s0+" value:"+s1;
+    Serial.println(sCmd);
+    mesh.sendBroadcast(sCmd);
+    }
 }
 
 void newConnectionCallback(uint32_t nodeId) {

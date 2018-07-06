@@ -39,7 +39,19 @@ void changedConnectionCallback() {
     mqttClient.publish("MyMesh/from/debug", mesh.subConnectionJson().c_str());
     }
 }
-
+String getFormattedNodeTime(){
+    //String message = "";
+    char buf[16];
+    long milliseconds = mesh.getNodeTime()/1000;
+    int millis  = (int) (milliseconds % 1000);
+    int seconds = (int) (milliseconds / 1000) % 60;
+    int minutes = (int) ((milliseconds / (1000 * 60)) % 60);
+    int hours = (int) ((milliseconds / (1000 * 60 * 60)) % 24);
+    sprintf(buf, "%02d:%02d:%02d.%03d", hours, minutes, seconds, millis);
+    Serial.print("\nNodeTime:");
+    Serial.println(buf);
+    return String(buf);
+    }
 
 void setup() {
   Serial.begin(115200);
@@ -117,13 +129,14 @@ void mqttCallback(char* topic, uint8_t* payload, unsigned int length) {
     if(msg == "getNodes"){
       mqttClient.publish("MyMesh/from/gateway", mesh.subConnectionJson().c_str());
       }
+    else if(msg == "getTime"){
+      mqttClient.publish("MyMesh/from/gateway", getFormattedNodeTime().c_str());
+      }
     }
-  else if(targetStr == "broadcast")
-  {
+  else if(targetStr == "broadcast"){
     mesh.sendBroadcast(msg);
-  }
-  else
-  {
+    }
+  else  {
     uint32_t target = strtoul(targetStr.c_str(), NULL, 10);
     Serial.print("MQTT Target:");
     Serial.println(target);

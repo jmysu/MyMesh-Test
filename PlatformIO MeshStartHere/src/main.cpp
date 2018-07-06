@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <painlessMesh.h>
 
+
 // some gpio pin that is connected to an LED...
 // on my rig, this is 5, change to the right number of your LED.
 #define   LED             2       // GPIO number of connected LED, ON ESP-12 IS GPIO2
@@ -29,37 +30,39 @@ void newConnectionCallback(uint32_t nodeId);
 void changedConnectionCallback();
 void nodeTimeAdjustedCallback(int32_t offset);
 void delayReceivedCallback(uint32_t from, int32_t delay);
+
 String getFormattedMillis(){
     //String message = "";
-    char buf[20];
+    char buf[16];
     long milliseconds = millis();
     int seconds = (int) (milliseconds / 1000) % 60;
     int minutes = (int) ((milliseconds / (1000 * 60)) % 60);
     int hours = (int) ((milliseconds / (1000 * 60 * 60)) % 24);
-    int days = (int) (milliseconds / (1000 * 60 * 60 * 24));
+    int days = (int) (milliseconds / (1000 * 60 * 60 * 24)); //Millis() will rollover every 50days
     sprintf(buf, "%03d:%02d:%02d:%02d", days, hours, minutes, seconds);
     return String(buf);
     }
 
 /*
-    // https://stackoverflow.com/questions/9072320/split-string-into-string-array
+// spliting a string and return the part nr index
+// split by separator
 */
-String getSplitted(String data, char separator, int index)
-    {
-      int found = 0;
-      int strIndex[] = {0, -1};
-      int maxIndex = data.length()-1;
-
-      for(int i=0; i<=maxIndex && found<=index; i++){
-        if(data.charAt(i)==separator || i==maxIndex){
-            found++;
-            strIndex[0] = strIndex[1]+1;
-            strIndex[1] = (i == maxIndex) ? i+1 : i;
+String getStringPartByNr(String data, char separator, int index)
+{
+    int stringData = 0;        //variable to count data part nr
+    String dataPart = "";      //variable to hole the return text
+      for(int i = 0; i<data.length(); i++) {    //Walk through the text one letter at a time
+        if(data[i]==separator) { //Count the number of times separator character appears in the text
+          stringData++;
+        }else if(stringData==index) {//get the text when separator is the rignt one
+          dataPart.concat(data[i]);
+        }else if(stringData>index) {//return text and stop if the next separator appears - to save CPU-time
+          return dataPart;
+          break;
         }
       }
-
-      return found>index ? data.substring(strIndex[0], strIndex[1]) : "";
-    }
+    return dataPart;//return text if this is the last part
+}
 
 Scheduler     userScheduler; // to control your personal task
 painlessMesh  mesh;
@@ -73,6 +76,8 @@ Task taskSendMessage( TASK_SECOND * 1, TASK_FOREVER, &sendMessage ); // start wi
 // Task to blink the number of nodes
 Task blinkNoNodes;
 bool onFlag = false;
+
+
 
 void setup() {
   Serial.begin(115200);
@@ -126,11 +131,11 @@ void loop() {
 }
 
 void sendMessage() {
-  String msg = "node ($";
-  String sId = String(mesh.getNodeId());
-  msg += sId.substring(sId.length()-3);
+  String msg = "<";
+  String sId = String(mesh.getNodeId() );
+  msg += sId;
   //msg += ")  FreeMemory: " + String(ESP.getFreeHeap());
-  msg += ") D:H:M:S:" +getFormattedMillis();
+  msg += "> DHMS>" +getFormattedMillis();
   mesh.sendBroadcast(msg);
 
   if (calc_delay) {
@@ -144,19 +149,21 @@ void sendMessage() {
 
   Serial.printf("Sending message: %s\n", msg.c_str());
 
-  taskSendMessage.setInterval( random(TASK_SECOND * 10, TASK_SECOND * 20));  // between 1 and 5 seconds
+  taskSendMessage.setInterval( random(TASK_SECOND * 30, TASK_SECOND * 60));  // between 1 and 5 seconds
 }
 
 
 void receivedCallback(uint32_t from, String & msg) {
-  Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
+  String sMeshTime = "("+String(mesh.getNodeTime())+")";
+  Serial.printf("%s: Received from %u msg=%s\n", sMeshTime.c_str(), from, msg.c_str());
   if (msg.indexOf("=")>0) {
-    String s0= getSplitted(msg, '=',0);
-    String s1= getSplitted(msg, '=',1);
+    String s0= getStringPartByNr(msg, '=',0);
+    String s1= getStringPartByNr(msg, '=',1);
     String sCmd="Got cmd:"+s0+" value:"+s1;
     Serial.println(sCmd);
-    mesh.sendBroadcast(sCmd);
+    mesh.sendBroadcast(sCmd); //no '=' to prevent recursive messages
     }
+
 }
 
 void newConnectionCallback(uint32_t nodeId) {

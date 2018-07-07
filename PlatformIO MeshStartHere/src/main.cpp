@@ -51,7 +51,7 @@ String getStringPartByNr(String data, char separator, int index)
 {
     int stringData = 0;        //variable to count data part nr
     String dataPart = "";      //variable to hole the return text
-      for(int i = 0; i<data.length(); i++) {    //Walk through the text one letter at a time
+      for(int i = 0; i<(int)data.length(); i++) {    //Walk through the text one letter at a time
         if(data[i]==separator) { //Count the number of times separator character appears in the text
           stringData++;
         }else if(stringData==index) {//get the text when separator is the rignt one
@@ -62,6 +62,16 @@ String getStringPartByNr(String data, char separator, int index)
         }
       }
     return dataPart;//return text if this is the last part
+}
+int getStringPartNr(String data, char separator)
+{
+    int stringData = 0;        //variable to count data part nr
+    for(int i = 0; i<(int)data.length(); i++) {    //Walk through the text one letter at a time
+        if(data[i]==separator) { //Count the number of times separator character appears in the text
+          stringData++;
+        }
+      }
+    return stringData;
 }
 
 Scheduler     userScheduler; // to control your personal task
@@ -86,11 +96,12 @@ void setup() {
 
   //mesh.setDebugMsgTypes( ERROR | MESH_STATUS | CONNECTION | SYNC | COMMUNICATION | GENERAL | MSG_TYPES | REMOTE ); // all types on
   //mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION | COMMUNICATION);  // set before init() so that you can see startup messages
-  mesh.setDebugMsgTypes(ERROR | DEBUG | CONNECTION);  // set before init() so that you can see startup messages
+  mesh.setDebugMsgTypes(ERROR | DEBUG );  // set before init() so that you can see startup messages
 
   //mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT);
   mesh.init(MESH_SSID, MESH_PASSWORD, &userScheduler, MESH_PORT, WIFI_AP_STA, 6 );
-
+  String sNodeId = "\nMy NodeId:"+String(mesh.getNodeId());
+  Serial.println(sNodeId);
   mesh.onReceive(&receivedCallback);
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
@@ -149,19 +160,33 @@ void sendMessage() {
 
   Serial.printf("Sending message: %s\n", msg.c_str());
 
-  taskSendMessage.setInterval( random(TASK_SECOND * 30, TASK_SECOND * 60));  // between 1 and 5 seconds
+  taskSendMessage.setInterval( random(TASK_SECOND * 10, TASK_SECOND * 15));  // between 10 and 15 seconds
 }
 
 
 void receivedCallback(uint32_t from, String & msg) {
+  Serial.print(millis()/1000);
   String sMeshTime = "("+String(mesh.getNodeTime())+")";
   Serial.printf("%s: Received from %u msg=%s\n", sMeshTime.c_str(), from, msg.c_str());
-  if (msg.indexOf("=")>0) {
-    String s0= getStringPartByNr(msg, '=',0);
-    String s1= getStringPartByNr(msg, '=',1);
-    String sCmd="Got cmd:"+s0+" value:"+s1;
-    Serial.println(sCmd);
-    mesh.sendBroadcast(sCmd); //no '=' to prevent recursive messages
+
+  if (msg.indexOf('=')>0) {
+    String sCmd  = getStringPartByNr(msg, '=',0);
+    String sValue= getStringPartByNr(msg, '=',1);
+    Serial.println(sCmd+" "+sValue);
+    String sCmds="";
+    String sCmdVal="";
+    Serial.println(getStringPartNr(sCmd, '/'));
+    int iNr=getStringPartNr(sCmd, '/');
+    if (iNr) {
+      for (int i=0; i<=iNr; i++) {
+        sCmds += ">"+getStringPartByNr(msg, '/',i);
+        }
+      sCmdVal=sCmds+":"+sValue;
+      }
+    else
+      sCmdVal=sCmd+":"+sValue;
+
+    mesh.sendBroadcast(sCmdVal); //no '=' to prevent recursive messages
     }
 
 }
@@ -171,12 +196,13 @@ void newConnectionCallback(uint32_t nodeId) {
   onFlag = false;
   blinkNoNodes.setIterations((mesh.getNodeList().size() + 1) * 2);
   blinkNoNodes.enableDelayed(BLINK_PERIOD - (mesh.getNodeTime() % (BLINK_PERIOD*1000))/1000);
-
-  Serial.printf("--> startHere: New Connection, nodeId = %u\n", nodeId);
+  Serial.print(millis()/1000);
+  Serial.printf(">--> startHere: New Connection, nodeId = %u\n", nodeId);
 }
 
 void changedConnectionCallback() {
-  Serial.printf("Changed connections %s\n", mesh.subConnectionJson().c_str());
+  Serial.print(millis()/1000);
+  Serial.printf(">Changed connections %s\n", mesh.subConnectionJson().c_str());
   // Reset blink task
   onFlag = false;
   blinkNoNodes.setIterations((mesh.getNodeList().size() + 1) * 2);
@@ -197,9 +223,9 @@ void changedConnectionCallback() {
 }
 
 void nodeTimeAdjustedCallback(int32_t offset) {
-  Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(), offset);
+  //Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(), offset);
 }
 
 void delayReceivedCallback(uint32_t from, int32_t delay) {
-  Serial.printf("Delay to node %u is %d us\n", from, delay);
+  //Serial.printf("Delay to node %u is %d us\n", from, delay);
 }

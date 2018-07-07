@@ -144,9 +144,9 @@ void loop() {
 void sendMessage() {
   String msg = "<";
   String sId = String(mesh.getNodeId() );
-  msg += sId;
+  msg += sId + ">";
   //msg += ")  FreeMemory: " + String(ESP.getFreeHeap());
-  msg += "> DHMS>" +getFormattedMillis();
+  msg += "[" +getFormattedMillis() +"]";
   mesh.sendBroadcast(msg);
 
   if (calc_delay) {

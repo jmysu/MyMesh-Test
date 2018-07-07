@@ -171,22 +171,19 @@ void receivedCallback(uint32_t from, String & msg) {
 
   if (msg.indexOf('=')>0) {
     String sCmd  = getStringPartByNr(msg, '=',0);
-    String sValue= getStringPartByNr(msg, '=',1);
-    Serial.println(sCmd+" "+sValue);
-    String sCmds="";
-    String sCmdVal="";
+    String sVal  = getStringPartByNr(msg, '=',1);
+    Serial.println(sCmd+" "+sVal);
     Serial.println(getStringPartNr(sCmd, '/'));
+    String sCmds="";
     int iNr=getStringPartNr(sCmd, '/');
-    if (iNr) {
+    if (iNr>0) {
       for (int i=0; i<=iNr; i++) {
-        sCmds += ">"+getStringPartByNr(msg, '/',i);
+        sCmds += ">"+getStringPartByNr(sCmd, '/',i);
         }
-      sCmdVal=sCmds+":"+sValue;
+      mesh.sendBroadcast("cmd:"+sCmds+" val:"+sVal); //no '=' to prevent recursive messages
       }
     else
-      sCmdVal=sCmd+":"+sValue;
-
-    mesh.sendBroadcast(sCmdVal); //no '=' to prevent recursive messages
+      mesh.sendBroadcast("cmd:"+sCmd+" val:"+sVal); //no '=' to prevent recursive messages
     }
 
 }
